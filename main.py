@@ -10,14 +10,14 @@ import pdb
 from PyQt5.QtWidgets import (QApplication, QWidget, QDesktopWidget,
                              QFileDialog, QFrame, QVBoxLayout, QMainWindow,
                              QPushButton, QLineEdit, QHBoxLayout, QVBoxLayout,
-                             QRadioButton, QButtonGroup, QSlider)
+                             QRadioButton, QButtonGroup, QSlider, QLabel)
 from PyQt5.QtCore import Qt
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 from highlightCellPick import MouseInteractorPickCell
 
 from vtkio import readSTL
-from expandAlgorithm import neighborExpand, angleExpand
+from expandAlgorithm import multiThresholdExpand
 
 
 class ToothViewer(QFrame):
@@ -41,7 +41,6 @@ class ToothViewer(QFrame):
         # Selected Mapper and Actor
         self.selectedMapper = vtk.vtkDataSetMapper()
         self.selectedActor = vtk.vtkActor()
-        self.expandAlgorithm = lambda polyData, ids: neighborExpand(polyData, ids, 5)
 
     def initializeWithSphere(self):
         # Create source
@@ -62,12 +61,10 @@ class ToothViewer(QFrame):
         self.renderer.AddActor(actor)
         self.renderer.ResetCamera()
 
-    def updateExpandAlgorithm(self, expandAlgorithm):
-        self.expandAlgorithm = expandAlgorithm
-
     def update(self, ids):
         self.ids = ids
-        self.expanded_ids = self.expandAlgorithm(self.polyData, ids)
+        self.expanded_ids = multiThresholdExpand(
+            self.polyData, ids, self.neighborThreshold, self.angleThreshold)
         self.highlight(self.expanded_ids)
 
     def highlight(self, ids):
@@ -126,44 +123,37 @@ class ToothViewerApp(QMainWindow):
         self.saveButton = QPushButton("Save")
 
         # Selection Mode Pannel Initialization
-        self.neighborSelectButton = QRadioButton("Neighbor")
-        self.angleSelectButton = QRadioButton("Angle")
-        self.selectModeGroup = QButtonGroup(self)
-        self.selectModeGroup.addButton(self.neighborSelectButton)
-        self.selectModeGroup.addButton(self.angleSelectButton)
-        self.neighborSelectButton.setChecked(True)
+        self.neighborLabel = QLabel("Neighbor")
+        self.angleLabel = QLabel("Angle")
 
         self.neighborThresholdSlider = QSlider(Qt.Horizontal)
-        self.neighborThresholdSlider.setMaximum(20)
-        self.neighborThresholdSlider.setMinimum(1)
+        self.neighborThresholdSlider.setMaximum(50)
+        self.neighborThresholdSlider.setMinimum(0)
         self.neighborThresholdSlider.setValue(5)
 
         self.angleThresholdSlider = QSlider(Qt.Horizontal)
-        self.angleThresholdSlider.setMaximum(100)
+        self.angleThresholdSlider.setMaximum(180)
         self.angleThresholdSlider.setMinimum(0)
-        self.angleThresholdSlider.setValue(50)
+        self.angleThresholdSlider.setValue(90)
 
-        self.neighborThreshold = self.neighborThresholdSlider.value()
-        self.angleThreshold = self.angleThresholdSlider.value() * 0.01
+        self.toothViewer.neighborThreshold = self.neighborThresholdSlider.value(
+        )
+        self.toothViewer.angleThreshold = self.angleThresholdSlider.value()
 
         self.loadButton.clicked.connect(self.loadSTL)
-        self.neighborSelectButton.toggled.connect(self.switchToNeighborMode)
-        self.angleSelectButton.toggled.connect(self.swtichToAngleMode)
 
         self.neighborThresholdSlider.valueChanged.connect(
             self.adjustNeighborThreshold)
         self.angleThresholdSlider.valueChanged.connect(
-            self.adjustAngleThreshold
-        )
-        
+            self.adjustAngleThreshold)
 
         # Layout Design
         neighborMode = QHBoxLayout()
-        neighborMode.addWidget(self.neighborSelectButton)
+        neighborMode.addWidget(self.neighborLabel)
         neighborMode.addWidget(self.neighborThresholdSlider)
 
         angleMode = QHBoxLayout()
-        angleMode.addWidget(self.angleSelectButton)
+        angleMode.addWidget(self.angleLabel)
         angleMode.addWidget(self.angleThresholdSlider)
 
         selectionModePanel = QVBoxLayout()
@@ -189,28 +179,11 @@ class ToothViewerApp(QMainWindow):
         self.toothViewer.start()
 
     def adjustNeighborThreshold(self):
-        self.neighborThreshold = self.neighborThresholdSlider.value()
-        self.toothViewer.updateExpandAlgorithm(
-            lambda polyData, ids: neighborExpand(polyData, ids, self.neighborThreshold)
-        )
-
-    def switchToNeighborMode(self):
-        self.toothViewer.updateExpandAlgorithm(
-            lambda polyData, ids: neighborExpand(polyData, ids, self.neighborThreshold)
+        self.toothViewer.neighborThreshold = self.neighborThresholdSlider.value(
         )
 
     def adjustAngleThreshold(self):
-        self.angleThreshold = self.angleThresholdSlider.value() * 0.01
-        self.toothViewer.updateExpandAlgorithm(
-            lambda polyData, ids: angleExpand(polyData, ids, self.angleThreshold)
-        )
-
-    def swtichToAngleMode(self):
-        self.toothViewer.updateExpandAlgorithm(
-            lambda polyData, ids: angleExpand(polyData, ids, self.angleThreshold)
-        )
-
-
+        self.toothViewer.angleThreshold = self.angleThresholdSlider.value()
 
     def loadSTL(self):
         try:
