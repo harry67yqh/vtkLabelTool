@@ -3,6 +3,31 @@ import ipdb
 from vtk.util import numpy_support
 import numpy as np
 
+def addSelection(ids, new_ids):
+    originIds = set([ids.GetValue(i) for i in range(ids.GetNumberOfValues())])
+    newIds = set([new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
+
+    sumIds = originIds.union(newIds)
+    
+    sum_ids = vtk.vtkIdTypeArray()
+    sum_ids.SetNumberOfComponents(1)
+    for id in sumIds:
+        sum_ids.InsertNextValue(id)
+
+    return sum_ids
+
+def minusSelection(ids, new_ids):
+    originIds = set([ids.GetValue(i) for i in range(ids.GetNumberOfValues())])
+    newIds = set([new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
+
+    difIds = originIds.difference(newIds)
+    
+    dif_ids = vtk.vtkIdTypeArray()
+    dif_ids.SetNumberOfComponents(1)
+    for id in difIds:
+        dif_ids.InsertNextValue(id)
+
+    return dif_ids
 
 def multiThresholdExpand(polyData, ids, distance, angle):
     """ MultiThresholdExpand algorithm.

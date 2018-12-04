@@ -17,7 +17,7 @@ import vtk
 from highlightCellPick import MouseInteractorPickCell
 
 from vtkio import readSTL
-from expandAlgorithm import multiThresholdExpand
+from expandAlgorithm import multiThresholdExpand, addSelection, minusSelection
 
 
 class ToothViewer(QFrame):
@@ -42,6 +42,11 @@ class ToothViewer(QFrame):
         self.selectedMapper = vtk.vtkDataSetMapper()
         self.selectedActor = vtk.vtkActor()
 
+        # selection Mode
+        self.selectionMode = 'NOT'
+        self.selected_ids = vtk.vtkIdTypeArray()
+        self.selected_ids.SetNumberOfComponents(1)
+
     def initializeWithSphere(self):
         # Create source
         source = vtk.vtkSphereSource()
@@ -63,9 +68,25 @@ class ToothViewer(QFrame):
 
     def update(self, ids):
         self.ids = ids
-        self.expanded_ids = multiThresholdExpand(
-            self.polyData, ids, self.neighborThreshold, self.angleThreshold)
-        self.highlight(self.expanded_ids)
+        if self.selectionMode == 'ADD':
+            self.selected_ids = addSelection(
+                self.selected_ids,
+                multiThresholdExpand(self.polyData, ids,
+                                     self.neighborThreshold,
+                                     self.angleThreshold))
+        elif self.selectionMode == 'SEL':
+            self.selected_ids = multiThresholdExpand(self.polyData, ids,
+                                                     self.neighborThreshold,
+                                                     self.angleThreshold)
+        elif self.selectionMode == 'DEL':
+            self.selected_ids = minusSelection(
+                self.selected_ids,
+                multiThresholdExpand(self.polyData, ids,
+                                     self.neighborThreshold,
+                                     self.angleThreshold))
+        else:
+            return
+        self.highlight(self.selected_ids)
 
     def highlight(self, ids):
 
@@ -119,58 +140,102 @@ class ToothViewerApp(QMainWindow):
         self.toothViewer.setGeometry(20, 20, 500, 500)
 
         # IO Pannel Initiliaztion
-        self.loadButton = QPushButton("Load")
-        self.saveButton = QPushButton("Save")
+        self.loadButton = QPushButton("LOAD")
+        self.saveButton = QPushButton("SAVE")
+        IOPanel = QHBoxLayout()
+        IOPanel.addWidget(self.loadButton)
+        IOPanel.addWidget(self.saveButton)
 
-        # Selection Mode Pannel Initialization
-        self.neighborLabel = QLabel("Neighbor")
-        self.angleLabel = QLabel("Angle")
+        # Selection Mode Panel Iitialization
+        self.noSelectionButton = QPushButton('N')
+        self.selectButton = QPushButton('o')
+        self.addSelectionButton = QPushButton('+')
+        self.minusSelectionButton = QPushButton('-')
+        self.noSelectionButton.setAutoExclusive(True)
+        self.selectButton.setAutoExclusive(True)
+        self.addSelectionButton.setAutoExclusive(True)
+        self.minusSelectionButton.setAutoExclusive(True)
+        self.noSelectionButton.setCheckable(True)
+        self.selectButton.setCheckable(True)
+        self.addSelectionButton.setCheckable(True)
+        self.minusSelectionButton.setCheckable(True)
+        self.noSelectionButton.setChecked(True)
 
+        selectionModePanel = QHBoxLayout()
+        selectionModePanel.addWidget(self.noSelectionButton)
+        selectionModePanel.addWidget(self.selectButton)
+        selectionModePanel.addWidget(self.addSelectionButton)
+        selectionModePanel.addWidget(self.minusSelectionButton)
+
+        # Selection Method Panel Initalization
+
+        self.neighborLabel = QLabel("NEIGHBOR")
         self.neighborThresholdSlider = QSlider(Qt.Horizontal)
-        self.neighborThresholdSlider.setMaximum(50)
+        self.neighborThresholdSlider.setMaximum(100)
         self.neighborThresholdSlider.setMinimum(0)
         self.neighborThresholdSlider.setValue(5)
+        self.neighborCount = QLabel("5")
+        self.toothViewer.neighborThreshold = self.neighborThresholdSlider.value(
+        )
 
+        neighborMode = QHBoxLayout()
+        neighborMode.addWidget(self.neighborLabel)
+        neighborMode.addWidget(self.neighborThresholdSlider)
+        neighborMode.addWidget(self.neighborCount)
+
+        self.angleLabel = QLabel("ANGLE (DEGREE)")
         self.angleThresholdSlider = QSlider(Qt.Horizontal)
         self.angleThresholdSlider.setMaximum(180)
         self.angleThresholdSlider.setMinimum(0)
         self.angleThresholdSlider.setValue(90)
-
-        self.toothViewer.neighborThreshold = self.neighborThresholdSlider.value(
-        )
+        self.angleCount = QLabel("90")
         self.toothViewer.angleThreshold = self.angleThresholdSlider.value()
 
+        angleMode = QHBoxLayout()
+        angleMode.addWidget(self.angleLabel)
+        angleMode.addWidget(self.angleThresholdSlider)
+        angleMode.addWidget(self.angleCount)
+
+        selectionMethodPanel = QVBoxLayout()
+        selectionMethodPanel.addLayout(neighborMode)
+        selectionMethodPanel.addLayout(angleMode)
+
+        # Selection Algorithm Panel Initalization
+
+        self.inverseButton = QPushButton('INVERSE')
+        self.boundaryOptimizationButton = QPushButton('BOUNDARY OPTIMIZATION')
+        self.fillHoleButton = QPushButton('FILL HOLE')
+
+        selectionAlgorithmPanel = QVBoxLayout()
+        selectionAlgorithmPanel.addWidget(self.inverseButton)
+        selectionAlgorithmPanel.addWidget(self.boundaryOptimizationButton)
+        selectionAlgorithmPanel.addWidget(self.fillHoleButton)
+
+        # Function Connection
         self.loadButton.clicked.connect(self.loadSTL)
 
         self.neighborThresholdSlider.valueChanged.connect(
             self.adjustNeighborThreshold)
         self.angleThresholdSlider.valueChanged.connect(
             self.adjustAngleThreshold)
+        self.noSelectionButton.clicked.connect(self.switchSelectionMode)
+        self.addSelectionButton.clicked.connect(self.switchSelectionMode)
+        self.selectButton.clicked.connect(self.switchSelectionMode)
+        self.minusSelectionButton.clicked.connect(self.switchSelectionMode)
 
-        # Layout Design
-        neighborMode = QHBoxLayout()
-        neighborMode.addWidget(self.neighborLabel)
-        neighborMode.addWidget(self.neighborThresholdSlider)
-
-        angleMode = QHBoxLayout()
-        angleMode.addWidget(self.angleLabel)
-        angleMode.addWidget(self.angleThresholdSlider)
-
-        selectionModePanel = QVBoxLayout()
-        selectionModePanel.addLayout(neighborMode)
-        selectionModePanel.addLayout(angleMode)
-
-        IOPanel = QVBoxLayout()
-        IOPanel.addWidget(self.loadButton)
-        IOPanel.addWidget(self.saveButton)
-
-        panel = QHBoxLayout()
+        # Entire layout
+        panel = QVBoxLayout()
         panel.addLayout(selectionModePanel)
+        panel.addLayout(selectionMethodPanel)
+        panel.addLayout(selectionAlgorithmPanel)
         panel.addLayout(IOPanel)
 
-        vbox = QVBoxLayout()
+        vbox = QHBoxLayout()
         vbox.addWidget(self.toothViewer)
         vbox.addLayout(panel)
+        vbox.setStretchFactor(self.toothViewer, 1)
+        vbox.setStretchFactor(panel, 0)
+
 
         self.setGeometry(20, 20, 800, 600)
         self.setWindowTitle('Mesh Labeling Tool')
@@ -178,11 +243,23 @@ class ToothViewerApp(QMainWindow):
         self.show()
         self.toothViewer.start()
 
+    def switchSelectionMode(self):
+        if self.addSelectionButton.isChecked():
+            self.toothViewer.selectionMode = 'ADD'
+        elif self.selectButton.isChecked():
+            self.toothViewer.selectionMode = 'SEL'
+        elif self.minusSelectionButton.isChecked():
+            self.toothViewer.selectionMode = 'DEL'
+        else:
+            self.toothViewer.selectionMode = 'NOT'
+
     def adjustNeighborThreshold(self):
+        self.neighborCount.setText(str(self.neighborThresholdSlider.value()))
         self.toothViewer.neighborThreshold = self.neighborThresholdSlider.value(
         )
 
     def adjustAngleThreshold(self):
+        self.angleCount.setText(str(self.angleThresholdSlider.value()))
         self.toothViewer.angleThreshold = self.angleThresholdSlider.value()
 
     def loadSTL(self):
