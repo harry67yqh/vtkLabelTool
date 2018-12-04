@@ -9,6 +9,7 @@ import sys
 import ipdb
 import numpy as np
 import vtk
+from vtk.util import numpy_support
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QApplication, QButtonGroup, QDesktopWidget,
                              QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -19,7 +20,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 from algorithm import (addSelection, inverseSelection, minusSelection,
                        multiThresholdExpand, onSelectedExpand)
 from highlightCellPick import MouseInteractorPickCell
-from vtkio import readSTL
+from vtkio import readSTL, writeVTP
 
 
 class ToothViewer(QFrame):
@@ -159,6 +160,7 @@ class ToothViewerApp(QMainWindow):
         # IO Pannel Initiliaztion
         self.loadButton = QPushButton("LOAD")
         self.saveButton = QPushButton("SAVE")
+        self.loadFilePath = None
         IOPanel = QHBoxLayout()
         IOPanel.addWidget(self.loadButton)
         IOPanel.addWidget(self.saveButton)
@@ -243,7 +245,7 @@ class ToothViewerApp(QMainWindow):
 
         # Function Connection
         self.loadButton.clicked.connect(self.loadSTL)
-
+        self.saveButton.clicked.connect(self.saveVTP)
         self.neighborThresholdSlider.valueChanged.connect(
             self.adjustNeighborThreshold)
         self.angleThresholdSlider.valueChanged.connect(
@@ -313,11 +315,13 @@ class ToothViewerApp(QMainWindow):
         self.toothViewer.angleThreshold = self.angleThresholdSlider.value()
 
     def loadSTL(self):
-        try:
-            filename = QFileDialog.getOpenFileName(self, 'Select STL file')
+
+        filename = QFileDialog.getOpenFileName(self, 'Select STL file',
+                                               filter='3D Object(*.stl)')
+
+        if filename[0] != '':
             polyData = readSTL(filename[0])
-        except:
-            self.statusBar().showMessage('Loading File Failed.')
+        else:
             return
 
         self.toothViewer.renderer.RemoveAllViewProps()
@@ -331,6 +335,46 @@ class ToothViewerApp(QMainWindow):
         self.toothViewer.renderer.AddActor(toothActor)
         self.toothViewer.renderer.ResetCamera()
         self.toothViewer.renderWindow.Render()
+
+        self.loadFilePath = filename
+
+    def saveVTP(self):
+        if self.loadFilePath:
+            default_filename = os.path.splitext(
+                self.loadFilePath[0])[0] + '.vtp'
+        else:
+            default_filename = '.'
+        filename = QFileDialog.getSaveFileName(
+            self, 'Save File', default_filename,
+            filter='VTK Polygonal Data (*.vtp)')
+
+        if filename[0] == '':
+            return
+
+        polyData = vtk.vtkPolyData()
+        polyData.DeepCopy(self.toothViewer.polyData)
+        # Cell Label
+        cellLabels = np.zeros(polyData.GetNumberOfCells(), dtype=np.uint8)
+        selectedCellIds = set([
+            self.toothViewer.selected_ids.GetValue(i)
+            for i in range(self.toothViewer.selected_ids.GetNumberOfValues())
+        ])
+        cellLabels[np.array(list(selectedCellIds), np.int32)] = 1
+        polyData.GetCellData().SetScalars(
+            numpy_support.numpy_to_vtk(cellLabels))
+        # Point Label
+        pointLabels = np.zeros(polyData.GetNumberOfPoints(), dtype=np.uint8)
+        pointIds = set()
+        for cellId in selectedCellIds:
+            cellPointIds = vtk.vtkIdList()
+            polyData.GetCellPoints(cellId, cellPointIds)
+            for i in range(cellPointIds.GetNumberOfIds()):
+                pointIds.add(cellPointIds.GetId(i))
+        pointLabels[np.array(list(pointIds), np.int32)] = 1
+        polyData.GetPointData().SetScalars(
+            numpy_support.numpy_to_vtk(pointLabels))
+
+        writeVTP(polyData, filename[0])
 
 
 if __name__ == '__main__':
