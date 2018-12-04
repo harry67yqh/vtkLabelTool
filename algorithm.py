@@ -34,6 +34,22 @@ def minusSelection(ids, new_ids):
     return dif_ids
 
 
+def inverseSelection(polyData, selected_ids):
+    selectedCellIds = set([
+        selected_ids.GetValue(i)
+        for i in range(selected_ids.GetNumberOfValues())
+    ])
+    allIds = set(range(polyData.GetNumberOfCells()))
+    inverseIds = allIds.difference(selectedCellIds)
+
+    dif_ids = vtk.vtkIdTypeArray()
+    dif_ids.SetNumberOfComponents(1)
+    for id in inverseIds:
+        dif_ids.InsertNextValue(id)
+
+    return dif_ids
+
+
 def onSelectedExpand(polyData, ids, selected_ids):
     selectedCellIds = set([
         selected_ids.GetValue(i)

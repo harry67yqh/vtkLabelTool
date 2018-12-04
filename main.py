@@ -4,8 +4,9 @@ Mainframe for vtk-labeling based on PyQt, vtk.
 
 """
 import os
-import ipdb
 import sys
+
+import ipdb
 import numpy as np
 import vtk
 from PyQt5.QtCore import Qt
@@ -15,7 +16,8 @@ from PyQt5.QtWidgets import (QApplication, QButtonGroup, QDesktopWidget,
                              QSlider, QVBoxLayout, QWidget)
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
-from algorithm import addSelection, minusSelection, multiThresholdExpand, onSelectedExpand
+from algorithm import (addSelection, inverseSelection, minusSelection,
+                       multiThresholdExpand, onSelectedExpand)
 from highlightCellPick import MouseInteractorPickCell
 from vtkio import readSTL
 
@@ -99,8 +101,8 @@ class ToothViewer(QFrame):
 
         self.highlight_with_id(self.selected_ids, (1, 0, 0),
                                self.selectedMapper, self.selectedActor)
-        self.highlight_with_id(self.ids, (0, 0, 1),
-                               self.pickedMapper, self.pickedActor)
+        self.highlight_with_id(self.ids, (0, 0, 1), self.pickedMapper,
+                               self.pickedActor)
 
     def highlight_with_id(self, ids, color, mapper, actor):
         selectionNode = vtk.vtkSelectionNode()
@@ -234,12 +236,10 @@ class ToothViewerApp(QMainWindow):
         # Selection Algorithm Panel Initalization
         self.inverseButton = QPushButton('INVERSE')
         self.removeOutlierButton = QPushButton('CLEAN OUTLIER')
-        self.fillHoleButton = QPushButton('FILL HOLE')
 
         selectionAlgorithmPanel = QVBoxLayout()
         selectionAlgorithmPanel.addWidget(self.inverseButton)
         selectionAlgorithmPanel.addWidget(self.removeOutlierButton)
-        selectionAlgorithmPanel.addWidget(self.fillHoleButton)
 
         # Function Connection
         self.loadButton.clicked.connect(self.loadSTL)
@@ -254,6 +254,7 @@ class ToothViewerApp(QMainWindow):
         self.minusSelectionButton.clicked.connect(self.switchSelectionMode)
         self.reverseButton.clicked.connect(self.reverseOperation)
         self.removeOutlierButton.clicked.connect(self.removeOutlier)
+        self.inverseButton.clicked.connect(self.inverse)
 
         # Entire layout
         panel = QVBoxLayout()
@@ -273,6 +274,11 @@ class ToothViewerApp(QMainWindow):
         self.widget.setLayout(vbox)
         self.show()
         self.toothViewer.start()
+
+    def inverse(self):
+        self.toothViewer.selected_ids = inverseSelection(
+            self.toothViewer.polyData, self.toothViewer.selected_ids)
+        self.toothViewer.highlight()
 
     def removeOutlier(self):
         if self.toothViewer.selected_ids.GetNumberOfValues() > 0:
