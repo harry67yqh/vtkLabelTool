@@ -3,12 +3,14 @@ import ipdb
 from vtk.util import numpy_support
 import numpy as np
 
+
 def addSelection(ids, new_ids):
     originIds = set([ids.GetValue(i) for i in range(ids.GetNumberOfValues())])
-    newIds = set([new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
+    newIds = set(
+        [new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
 
     sumIds = originIds.union(newIds)
-    
+
     sum_ids = vtk.vtkIdTypeArray()
     sum_ids.SetNumberOfComponents(1)
     for id in sumIds:
@@ -16,18 +18,61 @@ def addSelection(ids, new_ids):
 
     return sum_ids
 
+
 def minusSelection(ids, new_ids):
     originIds = set([ids.GetValue(i) for i in range(ids.GetNumberOfValues())])
-    newIds = set([new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
+    newIds = set(
+        [new_ids.GetValue(i) for i in range(new_ids.GetNumberOfValues())])
 
     difIds = originIds.difference(newIds)
-    
+
     dif_ids = vtk.vtkIdTypeArray()
     dif_ids.SetNumberOfComponents(1)
     for id in difIds:
         dif_ids.InsertNextValue(id)
 
     return dif_ids
+
+
+def onSelectedExpand(polyData, ids, selected_ids):
+    selectedCellIds = set([
+        selected_ids.GetValue(i)
+        for i in range(selected_ids.GetNumberOfValues())
+    ])
+    cellIds = set([ids.GetValue(i) for i in range(ids.GetNumberOfValues())])
+    newCellIds = cellIds
+
+    new_ids = vtk.vtkIdTypeArray()
+    new_ids.SetNumberOfComponents(1)
+
+    if len(cellIds.intersection(selectedCellIds)) > 0:
+        polyData.BuildLinks()
+        while newCellIds:
+            temp_newCellIds = set()
+            for cellId in newCellIds:
+                cellPointIds = vtk.vtkIdList()
+                polyData.GetCellPoints(cellId, cellPointIds)
+                for j in range(cellPointIds.GetNumberOfIds()):
+                    for k in range(j, cellPointIds.GetNumberOfIds()):
+                        if polyData.IsEdge(
+                                cellPointIds.GetId(j), cellPointIds.GetId(k)):
+                            neighborCellIds = vtk.vtkIdList()
+                            polyData.GetCellEdgeNeighbors(cellId,
+                                                        cellPointIds.GetId(j),
+                                                        cellPointIds.GetId(k),
+                                                        neighborCellIds)
+                            for l in range(neighborCellIds.GetNumberOfIds()):
+                                new_id = neighborCellIds.GetId(l)
+                                if new_id in selectedCellIds:
+                                    temp_newCellIds.add(new_id)
+            newCellIds = temp_newCellIds - cellIds
+            cellIds.update(newCellIds)
+
+        for id in cellIds:
+            new_ids.InsertNextValue(id)
+
+    return new_ids
+
 
 def multiThresholdExpand(polyData, ids, distance, angle):
     """ MultiThresholdExpand algorithm.
@@ -63,8 +108,9 @@ def multiThresholdExpand(polyData, ids, distance, angle):
                                                       neighborCellIds)
                         for l in range(neighborCellIds.GetNumberOfIds()):
                             new_id = neighborCellIds.GetId(l)
-                            if np.degrees(np.pi - np.arccos(np.sum(normals[new_id] *
-                                             origin_norm))) > angle:
+                            if np.degrees(np.pi - np.arccos(
+                                    np.sum(normals[new_id] * origin_norm))
+                                          ) > angle:
                                 temp_newCellIds.add(new_id)
         newCellIds = temp_newCellIds - cellIds
         cellIds.update(newCellIds)

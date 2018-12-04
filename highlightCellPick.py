@@ -12,6 +12,7 @@ import ipdb
 class MouseInteractorPickCell(vtk.vtkInteractorStyleTrackballCamera):
     def __init__(self, polyData, viewer):
         self.AddObserver("LeftButtonPressEvent", self.leftButtonPressEvent)
+        self.AddObserver("KeyPressEvent", self.KeyPressEvent)
         self.polyData = polyData
         self.viewer = viewer
 
@@ -34,7 +35,15 @@ class MouseInteractorPickCell(vtk.vtkInteractorStyleTrackballCamera):
 
         self.OnLeftButtonDown()
 
-
+    def KeyPressEvent(self, obj, event):
+        control = self.GetInteractor().GetControlKey()
+        key = self.GetInteractor().GetKeySym()
+        if control and key == "z":
+            if len(self.viewer.selected_ids_list) > 0:
+                self.viewer.selected_ids = self.viewer.selected_ids_list.pop()
+                self.viewer.highlight()
+        return
+        
 
 class MouseInteractorHighLightCell(vtk.vtkInteractorStyleTrackballCamera):
     def __init__(self, polyData, expandAlgorithm=None):
